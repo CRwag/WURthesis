@@ -1,0 +1,4 @@
+install.packages("geodata")
+library(geodata)
+
+help(geodata)

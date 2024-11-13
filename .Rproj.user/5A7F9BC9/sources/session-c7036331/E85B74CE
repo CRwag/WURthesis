@@ -1,0 +1,27 @@
+{
+    "id": "E85B74CE",
+    "path": "~/Wageningen/University/Thesis/WURthesisGithub/R Scripts/Distance to powerlines calculations.R",
+    "project_path": "R Scripts/Distance to powerlines calculations.R",
+    "type": "r_source",
+    "hash": "376389582",
+    "contents": "",
+    "dirty": false,
+    "created": 1731071446114.0,
+    "source_on_save": false,
+    "relative_order": 3,
+    "properties": {
+        "tempName": "Untitled1",
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "93,72",
+        "scrollLine": "71"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1731113357,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1731113357461,
+    "read_only": false,
+    "read_only_alternatives": []
+}

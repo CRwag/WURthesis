@@ -31,7 +31,6 @@ landval
 states <- states(cb = TRUE, year = 2023)
 states <- filter(states, !STUSPS %in% c("AK", "HI", "AS", "GU", "MP", "PR", "VI"))
 plot(states)
-states_vect <- vect(states)
 plot(states_vect, border = "black", col = NA)
 states_vect
 
@@ -66,12 +65,6 @@ plot(states_vect, border = 'black', add=T)
 plot(all_power, cex=0.1, add=T) #there is one point in Canada?
 plot(CBSA_vect, add=T)
 
-#SAVING MODIFIED DATA
-writeVector(all_power, "all_power_vect")
-writeRaster(avg_GHI, "avg_GHI.tiff")
-writeVector(CBSA_vect, "CBSA_vect")
-writeRaster(landval, "landval.tiff")
-writeVector(states_vect, "states_vect")
 
 #----------------------------------------------------------------------
 

@@ -1,44 +1,3 @@
-plot(all_power_rast, col= "black")
-plot(states_vect, add=T)
-plot(states_vect)
-plot(all_power_rast, col= "black", add=T)
-plot(all_power, col= "black", add=T)
-plot(landval)
-5988*9470
-gc()
-APrdf <- as.data.frame(all_power_rast)
-APrdf <- as.data.frame(all_power_rast, xy=T)
-View(APrdf)
-View(pp_csv)
-View(pp_csv)
-View(pp_csv)
-pp_csv <- pp_csv %>%
-filter(!State %in% c("Alaska", "Hawaii"))
-unique(pp_csv$State)
-pp_csv <- pp_csv %>%
-filter(!State %in% c("Alaska", "Hawaii", "Puerto Rico"))
-unique(pp_csv$State)
-pp_csv <- read.csv("~/Wageningen/University/Thesis/Data/EIA/Power Plants geospatial/Power_Plants.csv")
-unique(pp_csv$State)
-all_power
-#PULLING IN AND CHECKING POWER PLANT DATA
-all_power2 <- vect("~/Wageningen/University/Thesis/Data/EIA/Power Plants geospatial/Power_Plants.geojson")
-all_power2
-gc()
-remove(all_power2)
-View(APrdf)
-head(all_power_rast)
-freqtbl <- freq(all_power_rast, value = NA)
-print(freqtbl)
-all_power_rast
-5988*9470
-56706360-56694433
-View(pp_csv)
-pp_csv <- pp_csv %>%
-filter(!State %in% c("Alaska", "Hawaii", "Puerto Rico"))
-unique(pp_csv$State)
-pp_csv <- read.csv("~/Wageningen/University/Thesis/Data/EIA/Power Plants geospatial/Power_Plants.csv")
-pp_csv <- pp_csv %>%
 filter(!State %in% c("Alaska", "Hawaii", "Puerto Rico"))
 View(APrdf)
 View(pp_csv)
@@ -510,3 +469,44 @@ write.csv(master.raster_df, file = "~/Wageningen/University/Thesis/WURthesisGith
 #SAVING master.raster_df
 saveRDS(master.raster_df, file = "~/Wageningen/University/Thesis/WURthesisGithub/Modified Data/master_raster_df.rds")
 gc()
+#JOIN DISTANCE VALUES WITH master.raster.df
+master.raster_df <- readRDS("~/Wageningen/University/Thesis/WURthesisGithub/Modified Data/master_raster_df.rds")
+gc()
+all_power_dist_df <- readRDS("~/Wageningen/University/Thesis/WURthesisGithub/Modified Data/all_power_with_HVline_dist.rds")
+library(tidyverse)
+library(sf)
+master.raster_df <- master.raster_df %>%
+left_join(all_power_dist_df %>%
+select(OBJECTID, dist_to_HVline), by = "OBJECTID")
+names(master.raster_df)
+head(master.raster_df)
+write_rds(master.raster_df, "~/Wageningen/University/Thesis/WURthesisGithub/Modified Data/master_raster_df.rds")
+gc()
+names(master.raster_df)
+str(master.raster_df)
+help("summarise")
+install.packages("psych")
+library(psych)
+describe(master.raster_df)
+master.raster_df %>%
+filter(Plant_Code == 50891)
+master.raster_df %>%
+filter(Plant_Code == 50891) %>%
+select(cell, places_fmv_all, Plant_Name, Plant_Code, dist_to_HVline)
+gc()
+names(master.raster_df)
+hist(master.raster_df$places_fmv_all)
+hist(master.raster_df$dist_to_HVline)
+help("hist")
+hist(master.raster_df$dist_to_HVline, breaks = 50)
+hist(master.raster_df$dist_to_HVline, breaks = 50, xlim = c(0, 45000))
+hist(master.raster_df$dist_to_HVline, breaks = 50, xlim = c(0, 10000))
+hist(master.raster_df$dist_to_HVline, breaks = 10, xlim = c(0, 10000))
+hist(master.raster_df$dist_to_HVline, breaks = 300, xlim = c(0, 10000))
+hist(master.raster_df$dist_to_HVline, breaks = 500, xlim = c(0, 10000))
+hist(master.raster_df$dist_to_HVline, breaks = 1000, xlim = c(0, 10000))
+hist(master.raster_df$dist_to_HVline, breaks = 1000, xlim = c(0, 25000))
+gc()
+install.packages("geodata")
+library(geodata)
+install.packages("geodata")
