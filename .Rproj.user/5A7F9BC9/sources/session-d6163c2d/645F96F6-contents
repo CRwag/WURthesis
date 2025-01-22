@@ -1,0 +1,29 @@
+master.raster <- read_rds("~/Wageningen/University/Thesis/Data/1. Modified Data/master_raster_df_v2.rds")
+head(master.raster)
+names(master.raster)
+
+# Count the number of rows where Solar_MW > 0
+num_cells_with_solar <- sum(master.raster$Solar_MW > 0, na.rm = TRUE)
+
+# Print the result
+print(num_cells_with_solar)
+
+master.raster_noNA <- master.raster %>%
+  filter(Solar_MW > 0, !is.na(Solar_MW))
+
+#multiple plants in cell
+semicolons <- master.raster_noNA %>%
+  filter(grepl(";", all_plants_in_cell))
+
+# Filter rows where Solar_MW > 0 and count semicolons in `all_plants_in_cell`
+semicolon_counts_filtered <- master.raster %>%
+  filter(Solar_MW > 0) %>%
+  mutate(semicolon_count = stringr::str_count(all_plants_in_cell, ";")) %>%
+  summarise(
+    one_semicolon = sum(semicolon_count == 1, na.rm = TRUE),
+    two_semicolons = sum(semicolon_count == 2, na.rm = TRUE),
+    three_semicolons = sum(semicolon_count == 3, na.rm = TRUE)
+  )
+
+# Print the result
+print(semicolon_counts_filtered)
