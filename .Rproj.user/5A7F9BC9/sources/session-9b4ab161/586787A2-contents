@@ -1,0 +1,101 @@
+##weighted line chart of percentage of solar capacity coming from solar in  group 0 and group 1
+
+solar_share <- cell_year_panel %>%
+  group_by(year, group) %>%
+  summarise(
+    total_weighted_capacity = sum(Total_Capacity * weight),  # Sum total capacity for the whole group-year
+    total_weighted_solar = sum(`Solar Photovoltaic` * weight),  # Sum total solar PV for the whole group-year
+    solar_share = (total_weighted_solar / total_weighted_capacity) * 100,  # Compute % of total capacity from solar
+    .groups = "drop"
+  )
+
+#Plot of weighted % of capacity from solar (solar_share)
+ggplot(solar_share, aes(x = year, y = solar_share, color = factor(group))) +
+  geom_line(size = 1.2) +  # Line plot
+  geom_point(size = 2) +  # Add points for visibility
+  labs(
+    title = "Weighted Percentage of Energy Production from Solar Over Time",
+    x = "Year",
+    y = "Solar PV Share (%)",
+    color = "Group"
+  ) +
+  theme_minimal()
+
+#Plot of weighted solar capacity values summed by group-year
+ggplot(solar_share, aes(x = year, y = total_weighted_solar, color = factor(group))) +
+  geom_line(size = 1.2) +  # Line plot
+  geom_point(size = 2) +  # Add points for visibility
+  labs(
+    title = "Weighted Sum of Energy Production from Solar Over Time",
+    x = "Year",
+    y = "Total Solar PV Capacity (MW)",
+    color = "Group"
+  ) +
+  theme_minimal()
+
+
+#Adding shock and treated variable so I can do a simple DiD with the group level data
+group_year_panel <- solar_share %>%
+  mutate(
+    shock = ifelse(year >= 2019, 1, 0),
+    treated_post = shock * group
+  )
+
+# Adding dem_lean to group_year_panel
+dem_lean_group <- cell_year_panel %>%
+  group_by(group, year) %>%
+  summarise(
+    dem_lean_weighted_avg = sum(dem_lean * weight) / sum(weight),
+    .groups = "drop"
+  )
+
+group_year_panel <- group_year_panel %>%
+  left_join(dem_lean_group, by = c("group", "year"))
+
+#Adding 1 year lag shock variable
+group_year_panel <- group_year_panel %>%
+  mutate(shock_lag = ifelse(year >= 2020, 1, 0))
+
+#adding treatment_post_lag to go with new shock_lag
+group_year_panel <- group_year_panel %>%
+  mutate(
+    treated_post_lag = shock_lag * group
+  )
+
+write_rds(group_year_panel, "~/Wageningen/University/Thesis/Data/1. Modified Data/3. Panel Data/group_year_panel.rds")
+
+#adding YCOM data to group level panel data
+
+ycom_group_year <- cell_year_panel %>%
+  group_by(group, year) %>%
+  summarise(
+    YCOM_weighted_avg = sum(YCOM_value * weight) / sum(weight),
+    .groups = "drop"
+  )
+
+group_year_panel <- group_year_panel %>%
+  left_join(ycom_group_year, by = c("group", "year"))
+
+
+ggplot(group_year_panel, aes(x = year, y = YCOM_weighted_avg, color = factor(group))) +
+  geom_line(size = 1.2) +
+  geom_point(size = 2) +
+  labs(
+    title = "Weighted Average YCOM Value Over Time",
+    x = "Year",
+    y = "YCOM Weighted Average",
+    color = "Group"
+  ) +
+  theme_minimal()
+
+ggplot(group_year_panel, aes(x = year, y = dem_lean_weighted_avg, color = factor(group))) +
+  geom_line(size = 1.2) +   # Line plot
+  geom_point(size = 2) +    # Add points for clarity
+  labs(
+    title = "Weighted Average Democratic Lean Over Time",
+    x = "Year",
+    y = "Democratic Lean (Weighted Avg)",
+    color = "Group"
+  ) +
+  theme_minimal()
+

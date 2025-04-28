@@ -1,0 +1,22 @@
+library(tidyverse)
+library(terra)
+library(sf)
+library(ggplot2)
+library(cem)
+
+#Pulling in CEM and master raster
+MaineCEMv4.1 <- readRDS("~/Wageningen/University/Thesis/Data/1. Modified Data/2. Models/MaineCEM/MaineCEMv4.1.rds")
+master_raster_V2_reduced <- readRDS("~/Wageningen/University/Thesis/Data/1. Modified Data/master_raster_V2_reduced.rds")
+
+help("att")
+
+#Estimating SATT, using Solar_binary as dependent variable, no covariates
+att_simple <- att(
+  MaineCEMv4.1,
+  formula = Solar_binary ~ Maine,
+  data = master_raster_V2_reduced,
+  model = "logit"
+)
+
+att_simple
+write_rds(att_simple, "~/Wageningen/University/Thesis/Data/1. Modified Data/2. Models/MaineCEM/MaineCEMv4/att_simple.rds")

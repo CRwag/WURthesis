@@ -1,0 +1,27 @@
+{
+    "id": "7E102337",
+    "path": "~/Wageningen/University/Thesis/WURthesisGithub/R Scripts/3-19-25 Graphs.R",
+    "project_path": "R Scripts/3-19-25 Graphs.R",
+    "type": "r_source",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1742308725434.0,
+    "source_on_save": false,
+    "relative_order": 29,
+    "properties": {
+        "tempName": "Untitled3",
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "8,0",
+        "scrollLine": "1"
+    },
+    "folds": "11|37|51|0|\n52|24|114|0|\n115|18|208|0|\n209|34|296|0|\n297|33|332|0|\n334|15|397|0|\n399|36|428|0|\n429|26|460|0|\n461|88|505|0|\n506|46|553|0|\n554|54|560|0|\n561|23|566|0|\n567|23|689|0|\n690|27|718|0|\n719|28|747|0|\n748|11|760|0|\n761|27|871|0|\n872|46|917|0|\n918|68|960|0|\n961|40|996|0|\n997|60|1074|0|\n1075|22|1155|0|\n1156|20|1302|0|\n1303|14|1390|0|\n",
+    "lastKnownWriteTime": 1745855562,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1745855563000,
+    "read_only": false,
+    "read_only_alternatives": []
+}

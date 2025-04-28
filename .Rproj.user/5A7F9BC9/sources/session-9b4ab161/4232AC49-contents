@@ -1,0 +1,94 @@
+library(tidycensus)
+library(tidyverse)
+
+# Define the years you want to pull data for
+years <- 2010:2023
+
+# Define the variable for Median Household Income
+income_var <- "B19013_001"  # This is the ACS 5-year estimate for median household income
+
+# Create an empty list to store data
+income_data_list <- list()
+
+# Loop over years and pull data
+for (yr in years) {
+  income_data <- get_acs(
+    geography = "state",
+    variables = income_var,
+    year = yr,
+    survey = "acs5"
+  ) %>%
+    mutate(year = yr)  # Add the year column
+  
+  income_data_list[[as.character(yr)]] <- income_data
+}
+
+# Combine all years into a single data frame
+state_income_data <- bind_rows(income_data_list)
+
+# Rename columns for clarity
+state_income_data <- state_income_data %>%
+  rename(
+    state = NAME,               # State name
+    median_income = estimate    # Median Household Income
+  ) %>%
+  select(state, year, median_income)
+
+# View the final state-year data frame
+head(state_income_data)
+
+
+
+
+
+
+
+
+
+# Load libraries
+library(tidycensus)
+library(dplyr)
+
+# Define education variables
+education_vars <- c(
+  total_male_bach = "B15002_015",  # Total males with at least a Bachelor's degree
+  total_female_bach = "B15002_032" # Total females with at least a Bachelor's degree
+)
+
+# Define years
+years <- 2010:2023
+
+# Create an empty list to store data
+education_data_list <- list()
+
+# Loop through years to get state-level data
+for (yr in years) {
+  education_data <- get_acs(
+    geography = "state",
+    variables = education_vars,
+    year = yr,
+    survey = "acs5"
+  ) %>%
+    mutate(year = yr)  # Add year column
+  
+  education_data_list[[as.character(yr)]] <- education_data
+}
+
+# Combine all years into one data frame
+education_data <- bind_rows(education_data_list)
+
+# Reshape data to wide format
+education_data_wide <- education_data %>%
+  select(GEOID, NAME, variable, estimate, year) %>%
+  pivot_wider(names_from = variable, values_from = estimate)
+
+# Calculate Bachelor's degree attainment percentage
+education_data_wide <- education_data_wide %>%
+  mutate(
+    total_bach_degree = total_male_bach + total_female_bach,  # Total people with a Bachelor's
+    bach_degree_percent = total_bach_degree / sum(total_bach_degree, na.rm = TRUE) * 100  # Percentage
+  ) %>%
+  select(GEOID, NAME, year, bach_degree_percent)  # Keep relevant columns
+
+# View final dataset
+head(education_data_wide)

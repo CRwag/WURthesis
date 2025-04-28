@@ -1,0 +1,22 @@
+### trying to create a weighted pie chart of the land usage categories
+
+
+# Compute weighted proportions of Land Usage per group for the CEM year
+land_usage_dist <- cell_year_panel %>%
+  filter(year == 2023) %>%
+  group_by(group, Land_usage_cat) %>%
+  summarise(weighted_count = sum(weight), .groups = "drop") %>%
+  group_by(group) %>%
+  mutate(proportion = weighted_count / sum(weighted_count))
+
+ggplot(land_usage_dist %>% filter(group == 1), aes(x = "", y = proportion, fill = Land_usage_cat)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) +
+  theme_void() +
+  labs(title = paste("Land Usage Distribution - Treated Group (Group 1) in", 2023))
+
+ggplot(land_usage_dist %>% filter(group == 0), aes(x = "", y = proportion, fill = Land_usage_cat)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) +
+  theme_void() +
+  labs(title = paste("Land Usage Distribution - Counterfactual Group (Group 0) in", 2023))

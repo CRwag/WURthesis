@@ -1,0 +1,64 @@
+library(tidyverse)
+library(ggplot2)
+
+### MaineCEmv6 Cell-Year Panel Data Creation
+MaineCEMv6_df <- data.frame(
+  strata = MaineCEMv6$strata,
+  group = MaineCEMv6$groups,
+  matched = MaineCEMv6$matched,
+  weight = MaineCEMv6$w
+)
+head(MaineCEMv6_df)
+
+#joining with master_raster_v2_reduced_filtered_v2
+master_raster_V2_reduced_filtered_v2 <- bind_cols(master_raster_V2_reduced_filtered_v2, MaineCEMv6_df)
+head(master_raster_V2_reduced_filtered_v2)
+
+#removing unmatched cells
+master_raster_V2_reduced_filtered_v2 <- master_raster_V2_reduced_filtered_v2 %>%
+  filter(matched == TRUE)
+
+#creating cell_year_panelv3
+cell_year_panelv3 <- expand_grid(master_raster_V2_reduced_filtered_v2, year = 2010:2023)
+
+#double checking that every cell that is in cell_year_panelv3 is in the original cell_year_panel
+all(unique(cell_year_panelv3$cell) %in% cell_year_panel$cell) # result is TRUE
+
+#Pulling total capacity, solar PV capacity, dem_lean, YCOM_value, and dummy variables from original cell_year_panel
+cell_year_panelv3 <- cell_year_panelv3 %>%
+  left_join(
+    cell_year_panel %>% 
+      select(cell, year, Total_Capacity, `Solar Photovoltaic`, dem_lean, YCOM_value, shock, shock_lag, treated_post, treated_post_lag),
+    by = c("cell", "year")
+  )
+
+
+write_rds(cell_year_panelv3, "~/Wageningen/University/Thesis/Data/1. Modified Data/3. Panel Data/cell_year_panel_v3.rds")
+
+
+##Creating group-year panel data
+
+#Creating with aggregated variables first
+group_year_panel_v3 <- cell_year_panelv3 %>%  
+  group_by(year, group) %>%  
+  summarise(  
+    total_weighted_capacity = sum(Total_Capacity * weight),  
+    total_weighted_solar = sum(`Solar Photovoltaic` * weight),  
+    solar_share = (total_weighted_solar / total_weighted_capacity) * 100,
+    dem_lean_weighted_avg = sum(dem_lean * weight) / sum(weight),
+    YCOM_weighted_avg = sum(YCOM_value * weight) / sum(weight),
+    .groups = "drop"  
+  )
+
+#Creating dummy variables
+group_year_panel_v3 <- group_year_panel_v3 %>% 
+  mutate(
+    group = as.numeric(as.character(group)),  #had to convert to numeric to create treated_post, can't multiply a factor variable
+    shock = ifelse(year >= 2019, 1, 0),
+    treated_post = shock * group,
+    shock_lag = ifelse(year >= 2020, 1, 0),
+    treated_post_lag = shock_lag * group
+  )
+
+
+write_rds(group_year_panel_v3, "~/Wageningen/University/Thesis/Data/1. Modified Data/3. Panel Data/group_year_panel_v3.rds")

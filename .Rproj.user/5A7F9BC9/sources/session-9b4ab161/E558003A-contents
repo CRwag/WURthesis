@@ -1,0 +1,533 @@
+#Compiled Script
+
+####11-7-24 Data pull and cleanup
+library(tidyverse)
+library(tidycensus)
+library(terra)
+library(tigris)
+library(sf)
+library(ggplot2)
+
+#PULLING IN AND CHECKING AVG GHI DATA FROM 1998-2016 FOR THE USA
+avg_GHI <- rast("~/Wageningen/University/Thesis/Data/NREL_NSRB_v3_GHI/nsrdbv3_ghi/Annual GHI/nsrdb3_ghi.tif")
+plot(avg_GHI)
+avg_GHI
+
+#PULLING IN AND CHECKING CORE-BASED STATISTICAL AREAS (CBSAs), WHICH INCLUDES METRO. STAT. AREAS
+CBSA <- core_based_statistical_areas(cb = TRUE, year = 2023)
+plot(CBSA)
+CBSA
+CBSA_vect <- vect(CBSA)
+CBSA_vect
+
+#PULLING IN AND CHECKING POWER PLANT DATA
+all_power <- vect("~/Wageningen/University/Thesis/Data/EIA/Power Plants geospatial/Power_Plants.geojson")
+plot(all_power)
+all_power
+
+#PULLING IN AND CHECKING LAND VALUE DATA
+landval <- rast("~/Wageningen/University/Thesis/Data/Land Value Data Nolte 2020/places_fmv_pnas_dryad/1 estimates/places_fmv_all.tif")
+plot(landval)
+landval
+
+#PULLING IN STATE BORDER DATA AND CHECKING
+states <- states(cb = TRUE, year = 2023)
+states <- filter(states, !STUSPS %in% c("AK", "HI", "AS", "GU", "MP", "PR", "VI"))
+plot(states)
+states_vect <- vect(states)
+plot(states_vect, border = "black", col = NA)
+states_vect
+
+#REPROJECT ALL CRS TO: NAD83 / Conus Albers (EPSG:5070) 
+all_power <- project(all_power, "EPSG:5070")
+avg_GHI <- project(avg_GHI, "EPSG:5070")
+states_vect <- project(states_vect,"EPSG:5070")
+CBSA_vect <- project(CBSA_vect, "EPSG:5070")
+
+#SETTING EXTENT TO CONTIGUOUS USA (MATCHING ORIGINAL landval EXTENT)
+extent_contUSA <- ext(states_vect)
+all_power <- crop(all_power, extent_contUSA)
+avg_GHI <- crop(avg_GHI, extent_contUSA) #I'm having trouble here getting this to crop properly
+landval <- crop(landval, extent_contUSA)
+CBSA_vect <- crop(CBSA_vect, extent_contUSA)
+
+#Addressing old-style csr warning message "old-style crs object detected; please recreate object with a recent sf::st_crs()"
+crs(avg_GHI) <- st_crs(5070)$wkt
+crs(states_vect) <- st_crs(5070)$wkt
+
+#MASKING avg_GHI TO USA ONLY
+avg_GHI <- mask(avg_GHI, states_vect)
+
+#RESAMPLING avg_GHI TO landval
+res(landval)
+res(avg_GHI)
+avg_GHI <- resample(avg_GHI, landval, method = "bilinear")
+
+#NICE
+plot(landval)
+plot(states_vect, border = 'black', add=T)
+plot(all_power, cex=0.1, add=T) #there is one point in Canada?
+plot(CBSA_vect, add=T)
+
+#SAVING MODIFIED DATA
+writeVector(all_power, "all_power_vect")
+writeRaster(avg_GHI, "avg_GHI.tiff")
+writeVector(CBSA_vect, "CBSA_vect")
+writeRaster(landval, "landval.tiff")
+writeVector(states_vect, "states_vect")
+
+#----------------------------------------------------------------------
+
+#ATTEMPTING TO JOIN DATA IN ONE DATAFRAME
+rastercombo <- c(landval, avg_GHI_masked)
+rastercombo_df <- as.data.frame(rastercombo, xy= T, na.rm = T)
+rastercombo_vect <- vect(rastercombo_df, geom = c("x", "y"), crs = crs(landval))
+
+
+
+####11-12-24 Distance to powerlines calculations
+
+library(tidyverse)
+library(tidycensus)
+library(terra)
+library(tigris)
+library(sf)
+library(ggplot2)
+
+
+#PULLING IN AND CLEANING UP POWERLINE DATA
+powerlines_vect <- vect("~/Wageningen/University/Thesis/Data/Infrastructure/Electric__Power_Transmission_Lines.geojson")
+
+plot(powerlines_vect)
+powerlines_vect
+
+states <- states(cb = TRUE, year = 2023)
+states <- filter(states, !STUSPS %in% c("AK", "HI", "AS", "GU", "MP", "PR", "VI"))
+plot(states)
+states_vect <- vect(states)
+extent_contUSA <- ext(states_vect)
+
+powerlines_vect <- crop(powerlines_vect, extent_contUSA)
+powerlines_vect <- project(powerlines_vect, "EPSG:5070")
+
+plot(powerlines_vect)
+powerlines_vect
+extent_contUSA
+
+#PULLING IN AND CHECKING POWER PLANT DATA
+all_power <- vect("~/Wageningen/University/Thesis/Data/EIA/Power Plants geospatial/Power_Plants.geojson")
+all_power <- crop(all_power, extent_contUSA)
+all_power <- project(all_power, "EPSG:5070")
+
+plot(all_power)
+all_power
+
+names(powerlines_vect)
+
+HV_powerlines_vect <- powerlines_vect[powerlines_vect$VOLTAGE >= 69,] #I chose 69kv because that's generally when lines are considered to be "high voltage", and assumed they would not build HV lines to connect the power plant to the existing HV transmission lines
+#distances_PL_to_PP <- distance(all_power, HV_powerlines_vect) #takes like 20 min to run and produces a 7.6GB matrix
+nrow(distances_PL_to_PP)
+ncol(distances_PL_to_PP)
+mindists <- apply(distances_PL_to_PP, 1, min)
+mindists_df <- as.data.frame(mindists)
+mindists_df <- as.data.frame(t(mindists_df))
+
+#COMPARING WITH POWER PLANT SITES
+all_power_df  <- as.data.frame(all_power)
+
+all_power_df <- cbind(all_power_df, mindists_df)
+
+avgstdists <- all_power_df %>%
+  group_by(State) %>%
+  summarise(mean(V1))
+
+barplot(avgstdists$`mean(V1)`, 
+        names.arg = avgstdists$State, 
+        las = 2,          # Rotate axis labels for better readability
+        main = "Mean Distance from Power Plant to HV Powerline by State", 
+        ylab = "Mean Distance (meters)", 
+        col = "skyblue")
+
+states_vect <- project(states_vect,"EPSG:5070")
+plot(powerlines_vect, col = "green")
+plot(states_vect, add = T)
+plot(all_power, cex = 0.1, add = T)
+
+all_power_df <- all_power_df %>%
+  rename("dist_to_HVline" = V1)
+
+write_rds(all_power_df, "~/Wageningen/University/Thesis/WURthesisGithub/Modified Data/all_power_with_HVline_dist.rds")
+
+
+#JOIN DISTANCE VALUES WITH master.raster.df
+master.raster_df <- readRDS("~/Wageningen/University/Thesis/WURthesisGithub/Modified Data/master_raster_df.rds")
+
+names(master.raster_df)
+master.raster_df <- master.raster_df %>%
+  left_join(all_power_df %>%
+              select(OBJECTID, dist_to_HVline), by = "OBJECTID")
+
+
+
+####11-22-24 Nearest Substation Calculation v2
+library(tidyverse)
+library(tidycensus)
+library(terra)
+library(tigris)
+library(sf)
+library(ggplot2)
+library(RANN)
+
+#CLEANING AND VECTORIZIING SUBSTATIONS
+substations <- read.csv("~/Wageningen/University/Thesis/Data/US Substations 2020/Substations.csv")
+
+contiguous_states <- c(
+  "AL", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "ID", "IL", 
+  "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", 
+  "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", 
+  "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", 
+  "WA", "WV", "WI", "WY", "DC"
+)
+
+substations <- substations %>%
+  filter(TYPE == "SUBSTATION") %>%
+  filter(STATUS == "IN SERVICE") %>%
+  filter(COUNTRY == "USA") %>%
+  filter(STATE %in% contiguous_states )
+
+
+substations_vect <- vect(substations, geom = c("LONGITUDE", "LATITUDE"), crs = "EPSG:4326")
+plot(substations_vect)
+
+substations_vect <- project(substations_vect, "EPSG:5070")
+
+substations_vect
+
+writeVector(substations_vect, "~/Wageningen/University/Thesis/Data/1. Modified Data/substations_clean.shp")
+
+#pulling out coordinates
+substations_coords <- geom(substations_vect)[, c("x", "y")]
+
+centroid_coords <- read_rds("~/Wageningen/University/Thesis/Data/1. Modified Data/raster_centroid_coords.rds")
+
+#test
+cent_test <- centroid_coords[1:100, ]
+nntest <- nn2(data = substations_coords, query = cent_test, k = 1)
+head(nntest)
+substations_coords[43662, ]
+print(cent_test)
+
+#test 2
+cent_test <- centroid_coords[1:50000, ]
+system.time({
+  nntest <- nn2(data = substations_coords, query = cent_test, k = 1)
+})
+
+remove(cent_test)
+remove(nntest)
+
+#full calculation
+nearest_substation_dist <- nn2(data = substations_coords, query = centroid_coords, k = 1)
+
+
+#CREATING RASTER AND PLOT
+centroid_coords_df <- as.data.frame(centroid_coords)
+nearest_substation_dist_df <- as.data.frame(nearest_substation_dist)
+
+nearest_substation_dist_df <- bind_cols(centroid_coords_df, nearest_substation_dist_df)
+
+landval <- rast("~/Wageningen/University/Thesis/Data/1. Modified Data/landval.tiff")
+landval
+
+write_rds(nearest_substation_dist_df, "~/Wageningen/University/Thesis/Data/1. Modified Data/nearest_substation_dist.rds")
+
+#Creating vect and rast to plot for reasonableness check
+nearest_substation_dist_vect <- vect(nearest_substation_dist_df, geom = c("x","y"), crs= "EPSG:5070")
+nearest_substation_dist_vect
+head(nearest_substation_dist_vect)
+
+nearest_substation_dist_rast <- rasterize(nearest_substation_dist_vect, landval, field="nn.dists")
+nearest_substation_dist_rast
+plot(nearest_substation_dist_rast)
+
+#ADDING TO master_raster_df_v2
+master.raster_df <- read_rds("~/Wageningen/University/Thesis/Data/1. Modified Data/master_raster_df_v2.rds")
+
+master.raster_df %>%
+  filter(!is.na(landval_ln)) %>%
+  head()
+
+nearest_substation_dist <- read_rds("~/Wageningen/University/Thesis/Data/1. Modified Data/nearest_substation_dist.rds")
+
+head(nearest_substation_dist)
+
+master.raster_df <- master.raster_df %>%
+  left_join(nearest_substation_dist, by = c("x","y"))
+
+write_rds(master.raster_df, "~/Wageningen/University/Thesis/Data/1. Modified Data/master_raster_df_v2.rds")
+
+
+
+
+####11-25-24 Nearest HV Powerline Calculation
+library(RANN)
+library(sf)
+library(terra)
+library(tidyverse)
+
+
+
+HVlines <- vect("~/Wageningen/University/Thesis/Data/1. Modified Data/HVpowerlines_clean/HVpowerlines_clean.shp")
+landval <- rast("~/Wageningen/University/Thesis/Data/1. Modified Data/landval.tiff")
+
+blank_raster <- rast(landval)
+
+# Rasterize HVlines onto blank_raster
+HVlines_raster <- rasterize(HVlines, blank_raster, touches = TRUE)
+plot(HVlines_raster, col = "black")
+
+plot(HVlines_raster, col = "black", xlim = c(1780435, 2000589), ylim = c(2155623, 2234074), main = "Zoomed in on LI")
+
+HVlines_raster
+
+#Pull coordinates of cells which contain HV powerlines
+HVlines_df <- as.data.frame(HVlines_raster, xy=T)
+HVlines_df <- HVlines_df %>%
+  select(x,y)
+
+HVlines_cell_coords <- as.matrix(HVlines_df)
+
+#Coordinates of all cells in the cont. USA (created from landval)
+centroid_coords <- read_rds("~/Wageningen/University/Thesis/Data/1. Modified Data/raster_centroid_coords.rds")
+
+#Distance calculation from each cell
+nearest_HVline_dist <- nn2(data = HVlines_cell_coords, query = centroid_coords, k = 1)
+
+#Turning into data frame
+centroid_coords_df <- as.data.frame(centroid_coords)
+nearest_HVline_dist_df <- as.data.frame(nearest_HVline_dist)
+
+nearest_HVline_dist_df <- nearest_HVline_dist_df %>%
+  select(nn.dists)
+
+nearest_HVline_dist_df <- bind_cols(centroid_coords_df, nearest_HVline_dist_df)
+
+#plotting for reasonableness check
+nearest_HVline_vect <- vect(nearest_HVline_dist_df, geom = c("x", "y"), crs = crs(landval))
+nearest_HVline_raster <- rasterize(nearest_HVline_vect, landval, field = "nn.dists")
+plot(nearest_HVline_raster)
+
+
+#Adding to master_raster_df_v2
+
+master.raster_df <- read_rds("~/Wageningen/University/Thesis/Data/1. Modified Data/master_raster_df_v2.rds")
+names(master.raster_df)
+
+master.raster_df %>%
+  filter(!is.na(landval_ln)) %>%
+  head()
+
+master.raster_df <- master.raster_df %>%
+  select(-nn.idx) %>%
+  rename(substation_dist = nn.dists)
+
+master.raster_df <- master.raster_df %>%
+  left_join(nearest_HVline_dist_df, by = c("x", "y"))
+
+master.raster_df <- master.raster_df %>%
+  rename(HVline_dist = nn.dists)
+
+write_rds(master.raster_df, "~/Wageningen/University/Thesis/Data/1. Modified Data/master_raster_df_v2.rds")
+
+
+
+####11-26-24 Elevation, Slope and Aspect
+library(sf)
+library(terra)
+library(tidyverse)
+library(geodata)
+library(elevatr)
+library(terra)
+
+
+#Output path
+output_path <- "~/Wageningen/University/Thesis/Data/elevation/geodata package"
+dir.create(output_path, showWarnings = FALSE)
+
+#Defining box for contiguous USA
+lon_range <- seq(-125, -67, by = 1)
+lat_range <- seq(24, 50, by = 1)
+
+#Empty list for tiles
+tiles <- list()
+
+# Loop through the longitude and latitude range
+for (lon in lon_range) {
+  for (lat in lat_range) {
+    cat("Downloading tile for lon:", lon, "lat:", lat, "\n")
+    try({
+      # Download 90m tile for each (lon, lat)
+      tile <- elevation_3s(lon = lon, lat = lat, path = output_path)
+      tiles <- append(tiles, tile)
+    }, silent = TRUE)
+  }
+}
+
+
+tif_files <- list.files(path = "~/Wageningen/University/Thesis/Data/elevation/geodata package/elevation", pattern = "\\.tif$", full.names = TRUE)
+tiles <- lapply(tif_files, rast)
+combined_raster <- do.call(merge, tiles)
+writeRaster(combined_raster, "~/Wageningen/University/Thesis/Data/elevation/geodata package/elevation/USA_elevation_3min.tif")
+
+Elevation <- combined_raster
+remove(combined_raster)
+Slope <- terrain(Elevation, v = "slope", neighbors = 8, unit = "degrees")
+Aspect <- terrain(Elevation, v = "aspect", neighbors = 8, unit = "degrees")
+writeRaster(Slope, "~/Wageningen/University/Thesis/Data/elevation/geodata package/USA_slope_3min.tif")
+writeRaster(Aspect, "~/Wageningen/University/Thesis/Data/elevation/geodata package/USA_aspect_3min.tif")
+
+
+#Matching projection and adding to master
+
+#pulling in landval for extent/CRS
+landval <- rast("~/Wageningen/University/Thesis/Data/1. Modified Data/landval.tiff")
+landval
+
+#pulling in states vector in case I want to mask
+states_vect <- vect("~/Wageningen/University/Thesis/Data/1. Modified Data/states_vect/states_vect.shp")
+plot(states_vect)
+
+#re-projecting slope and aspect
+Slope_reproj <- project(Slope, landval)
+Aspect_reproj <- project(Aspect, landval)
+
+#transforming to data frames
+Slope_df <- as.data.frame(Slope_reproj, xy = T)
+Aspect_df <- as.data.frame(Aspect_reproj, xy = T)
+
+#Changing aspect from degrees to cardinal and intercardinal directions
+
+#function to convert degrees to cardinal directions
+aspect_to_cardinal <- function(aspect) {
+  ifelse(is.na(aspect), NA,
+         ifelse(aspect >= 337.5 | aspect < 22.5, "N",
+                ifelse(aspect >= 22.5 & aspect < 67.5, "NE",
+                       ifelse(aspect >= 67.5 & aspect < 112.5, "E",
+                              ifelse(aspect >= 112.5 & aspect < 157.5, "SE",
+                                     ifelse(aspect >= 157.5 & aspect < 202.5, "S",
+                                            ifelse(aspect >= 202.5 & aspect < 247.5, "SW",
+                                                   ifelse(aspect >= 247.5 & aspect < 292.5, "W",
+                                                          ifelse(aspect >= 292.5 & aspect < 337.5, "NW", NA)))))))))
+}
+
+#applying function
+Aspect_df <- Aspect_df %>%
+  mutate(aspect_cardinal = aspect_to_cardinal(aspect))
+
+#Pulling in master.raster
+master.raster <- read_rds("~/Wageningen/University/Thesis/Data/1. Modified Data/master_raster_df_v2.rds")
+names(master.raster)
+
+master.raster <- master.raster %>%
+  select(-slope) %>%
+  left_join(Slope_df, by = c("x","y")) %>%
+  left_join(Aspect_df, by = c("x","y"))
+
+write_rds(master.raster, "~/Wageningen/University/Thesis/Data/1. Modified Data/master_raster_df_v2.rds")
+
+
+
+
+####12-2-24 States and Land Usage
+
+library(tidyverse)
+library(tidycensus)
+library(terra)
+library(tigris)
+library(sf)
+library(ggplot2)
+
+master.raster <- read_rds("~/Wageningen/University/Thesis/Data/1. Modified Data/master_raster_df_v2.rds")
+names(master.raster)
+unique(master.raster$State)
+
+#ADDING STATE VALUES TO ALL CELLS
+states_vect <- vect("~/Wageningen/University/Thesis/Data/1. Modified Data/states_vect/states_vect.shp")
+states_vect
+
+landval <- rast("~/Wageningen/University/Thesis/Data/1. Modified Data/landval.tiff")
+states_rast <- rasterize(states_vect, landval, field = "STUSPS")
+
+states_rast
+plot(states_rast)
+names(states_vect)
+unique(states_vect$NAME)
+
+states_df <- as.data.frame(states_rast, cell = T)
+head(states_df)
+head(master.raster)
+
+master.raster <- master.raster %>%
+  left_join(states_df, by = "cell")
+
+names(master.raster)
+
+master.raster <- master.raster %>%
+  select(-State) %>%
+  rename("State" = "STUSPS")
+
+names(master.raster)
+unique(master.raster$State)
+
+remove(states_df, states_rast, states_vect)
+
+write_rds(master.raster, "~/Wageningen/University/Thesis/Data/1. Modified Data/master_raster_df_v2.rds")
+
+#--------------------------------------------------------------
+
+#ADDING LAND USAGE DATA TO ALL CELLS
+
+land_usage <- rast("~/Wageningen/University/Thesis/Data/USDA NASS Cropland Data/2023 National CDL 30m/2023_30m_cdls.tif")
+plot(land_usage)
+land_usage
+unique(land_usage$Class_Names)
+
+land_usage_re <- resample(land_usage, landval, method = "near")
+land_usage_re
+plot(land_usage_re)
+land_usage_re_df <- as.data.frame(land_usage_re, cells = T)
+unique(land_usage_re_df$Class_Names)
+
+land_usage_re_df <- land_usage_re_df %>%
+  filter(Class_Names != "Background")
+
+unique(land_usage_re_df)
+
+#categorizing land uses
+cat_key <- read.csv("~/Wageningen/University/Thesis/Data/1. Modified Data/Land Use Category Key.csv", header = F)
+
+cat_key <- cat_key %>%
+  rename("Class_Names" = "V1")
+
+land_usage_re_df$Class_Names <- str_trim(land_usage_re_df$Class_Names, side = "both")
+
+land_usage_re_df <- land_usage_re_df %>%
+  left_join(cat_key, by = "Class_Names")
+
+land_usage_re_df %>%
+  filter(is.na(V2))
+
+land_usage_re_df <- land_usage_re_df %>%
+  rename("Land_usage" = "Class_Names") %>%
+  rename("Land_usage_cat" = "V2")
+
+write_rds(land_usage_re_df, "~/Wageningen/University/Thesis/Data/1. Modified Data/CroplandCROS2023_resampled_df.rds")
+
+master.raster <- master.raster %>%
+  left_join(land_usage_re_df, by = "cell")
+
+write_rds(master.raster, "~/Wageningen/University/Thesis/Data/1. Modified Data/master_raster_df_v2.rds")
+
+
+
+####

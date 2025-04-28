@@ -1,0 +1,42 @@
+
+
+
+
+
+
+
+
+
+
+#MaineCEMv7.3: CEM with states who have had similar policies enacted from 2005-2020 removed (custom cutpoints)
+MaineCEMv7.3 <- cem(
+  treatment = "Maine",
+  data = master_raster_V2_reduced_filtered_v3,
+  drop = c("cell", "x", "y", "State", "Solar_binary"),
+  cutpoints = list(
+    slope = c(0, 3, 5, 8, 10, Inf), # Binned into categories based on domain relevant categories [<3 degrees (ideal), 3-5 degrees (very suitable), 5-8 degrees (moderately suitable), 8-10 degrees (less suitable), 10+ (unsuitable)]
+    
+    HVline_dist = c(0, 1, 5, 7, 10, Inf), # Binned into categories based on domain relevant categories [<1km (ideal), 1-5km (very suitable), 5-7km (moderately suitable), 7-10km (less suitable), 10km+ (unsuitable)]
+    
+    substation_dist = c(0, 1, 5, 7, 10, Inf), # Binned into categories based on domain relevant categories [<1km (ideal), 1-5km (very suitable), 5-7km (moderately suitable), 7-10km (less suitable), 10km+ (unsuitable)]
+    
+    nsrdb3_ghi = nsrdb3_cutpoints_25ME, # Binned by quartiles of Maine GHI values
+    
+    landval_ln = landval_cutpoints_25ME # Binned by quartiles of Maine landval_ln values
+  ),
+  eval.imbalance = T,
+  keep.all = T,
+  L1.breaks = list(
+    slope = c(0, 3, 5, 8, 10, Inf), # Binned into categories based on domain relevant categories [<3 degrees (ideal), 3-5 degrees (very suitable), 5-8 degrees (moderately suitable), 8-10 degrees (less suitable), 10+ (unsuitable)]
+    
+    HVline_dist = c(0, 1, 5, 7, 10, Inf), # Binned into categories based on domain relevant categories [<1km (ideal), 1-5km (very suitable), 5-7km (moderately suitable), 7-10km (less suitable), 10km+ (unsuitable)]
+    
+    substation_dist = c(0, 1, 5, 7, 10, Inf), # Binned into categories based on domain relevant categories [<1km (ideal), 1-5km (very suitable), 5-7km (moderately suitable), 7-10km (less suitable), 10km+ (unsuitable)]
+    
+    nsrdb3_ghi = nsrdb3_cutpoints_25ME, # Binned by quartiles of Maine GHI values
+    
+    landval_ln = landval_cutpoints_25ME # Binned by quartiles of Maine landval_ln values
+  )
+)
+
+write_rds(MaineCEMv7.3, "~/Wageningen/University/Thesis/Data/1. Modified Data/2. Models/MaineCEM/MaineCEMv7_3.rds")

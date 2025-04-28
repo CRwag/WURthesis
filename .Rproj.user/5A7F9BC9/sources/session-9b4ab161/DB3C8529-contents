@@ -1,0 +1,137 @@
+##Creating annual operating generator data sets
+
+#Pulling in September EIA 860M data
+Op_gens_df <- read_excel("~/Wageningen/University/Thesis/Data/EIA/EIA-860M/september_generator2024.xlsx", sheet = "Operating", range = "A3:AG26410")
+Ret_gens_df <- read_excel("~/Wageningen/University/Thesis/Data/EIA/EIA-860M/september_generator2024.xlsx", sheet = "Retired", range = "A3:Z6711")
+view(Op_gens_df)
+view(Ret_gens_df)
+
+#Selecting columns
+Op_gens_df <- Op_gens_df %>%
+  select(`Entity ID`, `Entity Name`, `Plant ID`, `Plant Name`, `Plant State`, `Generator ID`, `Nameplate Capacity (MW)`, Technology, `Operating Month`, `Operating Year`, Latitude, Longitude)
+
+Ret_gens_df <- Ret_gens_df %>%
+  select(`Entity ID`, `Entity Name`, `Plant ID`, `Plant Name`, `Plant State`, `Generator ID`, `Nameplate Capacity (MW)`, Technology, `Operating Month`, `Operating Year`,`Retirement Month`,`Retirement Year`, Latitude, Longitude)
+
+Op_gens_df <- Op_gens_df %>%
+  mutate(`Retirement Month` = NA, `Retirement Year` = NA)
+
+#Combining data
+gens_df <- bind_rows(Op_gens_df, Ret_gens_df)
+
+
+#altering start and retirement years
+gens_df <- gens_df %>%
+  mutate(
+    `Adjusted Operating Year` = case_when(
+      `Operating Month` <= 6 ~ `Operating Year`,       # If generator started operating in the first half of the year, I'll count it towards that year
+      `Operating Month` > 6  ~ `Operating Year` + 1    # If generator started operating in the second half of the year, I'll only start to count it from the next year onwards
+    ),
+    `Adjusted Retirement Year` = case_when(
+      is.na(`Retirement Year`) ~ NA_integer_,          # If Retirement Year is NA, keep NA
+      `Retirement Month` > 6 ~ `Retirement Year`,      # If a generator retires in the second half of the year, I'll consider it operational for that year
+      `Retirement Month` <= 6  ~ `Retirement Year` - 1  # If a generator retires in the first half of the year, subtract 1 year
+    )
+  )
+
+#Removing retirement and operating months/years
+gens_df <- gens_df %>%
+  select(-`Operating Month`, -`Retirement Month`, -`Operating Year`, -`Retirement Year`)
+
+renewables <- c("Conventional Hydroelectric", "Geothermal", 
+                   "Offshore Wind Turbine", "Onshore Wind Turbine",  
+                   "Municipal Solid Waste", "Other Waste Biomass",  
+                   "Solar Photovoltaic", "Solar Thermal with Energy Storage",  
+                   "Solar Thermal without Energy Storage", "Wood/Wood Waste Biomass")
+
+gens_df <- gens_df %>%
+  mutate(Renewable = if_else(Technology %in% renewables, "Renewable", "Non-renewable"))
+
+gens_panel <- gens_df %>%
+  # Filter to Maine
+  filter(`Plant State` == "ME") %>%
+  # Define end year: if no retirement or retirement beyond 2023, set to 2023
+  mutate(end_year = if_else(is.na(`Adjusted Retirement Year`) | `Adjusted Retirement Year` > 2023, 
+                            2023L, 
+                            `Adjusted Retirement Year`)) %>%
+  rowwise() %>%
+  mutate(year = list(seq(`Adjusted Operating Year`, end_year))) %>%
+  unnest(cols = c(year)) %>%
+  ungroup()
+
+panel_df <- gens_panel %>%
+  group_by(year, `Plant State`, Technology, Renewable) %>%
+  summarise(total_capacity = sum(`Nameplate Capacity (MW)`, na.rm = TRUE), .groups = "drop")
+
+
+
+##Graph 1: Total Onshore Wind Capacity ME
+onshore_wind_df <- panel_df %>%
+  filter(Technology == "Onshore Wind Turbine") %>%
+  group_by(year) %>%
+  summarise(total_onshore = sum(total_capacity))
+
+Wind_MW <- ggplot(onshore_wind_df, aes(x = year, y = total_onshore)) +
+  geom_line() +
+  labs(title = "Total Onshore Wind Capacity in ME (2005-2023)",
+       x = "Year", y = "Nameplate Capacity (MW)")
+
+##Graph 2: Total Onshore Wind as a % of Total Renewable Capacity
+renewable_capacity <- panel_df %>%
+  filter(Renewable == "Renewable") %>%
+  group_by(year) %>%
+  summarise(total_renewable = sum(total_capacity))
+
+onshore_pct_renewable <- onshore_wind_df %>%
+  left_join(renewable_capacity, by = "year") %>%
+  mutate(pct_renewable = (total_onshore / total_renewable) * 100)
+
+Wind_percent <- ggplot(onshore_pct_renewable, aes(x = year, y = pct_renewable)) +
+  geom_line() +
+  labs(title = "Onshore Wind Capacity as % of Renewable Capacity in ME",
+       x = "Year", y = "Percentage (%)")
+
+##Graph 3: Total ONshore Wind as a % of Total Capacity
+total_overall <- panel_df %>%
+  group_by(year) %>%
+  summarise(total_overall = sum(total_capacity))
+
+onshore_pct_overall <- onshore_wind_df %>%
+  left_join(total_overall, by = "year") %>%
+  mutate(pct_overall = (total_onshore / total_overall) * 100)
+
+ggplot(onshore_pct_overall, aes(x = year, y = pct_overall)) +
+  geom_line() +
+  labs(title = "Onshore Wind Capacity as % of Overall Capacity in ME",
+       x = "Year", y = "Percentage (%)")
+
+##Graph 4: Renewable Capacity Sandplot
+renewable_panel <- panel_df %>%
+  filter(Renewable == "Renewable") %>%
+  group_by(year, Technology) %>%
+  summarise(total_capacity = sum(total_capacity), .groups = "drop")
+
+Renewable_sandplot <- ggplot(renewable_panel, aes(x = year, y = total_capacity, fill = Technology)) +
+  geom_area() +
+  labs(title = "Cumulative Renewable Energy Capacity in ME",
+       x = "Year", y = "Nameplate Capacity (MW)")
+
+  Renewable_sandplot_2000 <- ggplot(renewable_panel, aes(x = year, y = total_capacity, fill = Technology)) +
+  geom_area() +
+  coord_cartesian(xlim = c(2000, 2022)) +
+  labs(title = "Cumulative Renewable Energy Capacity in ME",
+       x = "Year", y = "Nameplate Capacity (MW)")
+
+##Graph 5: Renewable Technology Shares
+renewable_pct <- renewable_panel %>%
+  group_by(year) %>%
+  mutate(year_total = sum(total_capacity)) %>%
+  ungroup() %>%
+  mutate(pct = (total_capacity / year_total) * 100)
+
+ggplot(renewable_pct, aes(x = year, y = pct, color = Technology)) +
+  geom_line() +
+  labs(title = "Renewable Technologies as % of Total Renewable Capacity in ME",
+       x = "Year", y = "Percentage (%)")
+
+
